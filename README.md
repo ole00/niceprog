@@ -14,11 +14,13 @@ Features:
 * auto creates multi boot partition table for ICE40 FPGAs
 * automatic erase of written flash blocks (no need to erase the chip before writing)
 * read, write, verify, identify flash chip commands
-* supports external pass-through UART so that niceprog serves as USB-to-UART interface.
+* execute ICE40 FPGA stream without writing it to flash
+* supports external pass-through UART so that niceprog serves as an USB-to-UART interface.
 * automatic switching between external pass-through UART and flash operations.
 
 Performance:
 * writes and verifies simple IC40HX8k streams (~132 kbytes) in less than 3 seconds.
+* executes a simple IC40HX8k stream (~132 kbytes) in about a second.
 
 Niceprog has 2 parts, both are located in this repo:
 * PC app - sources in src_pc directory. Compile it in Linux by supplied shell scripts. Run the PC app without parameters to view options
