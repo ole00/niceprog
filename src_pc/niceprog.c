@@ -12,7 +12,7 @@ FLASH SPI NOR MEmory via serial port
 #include "serial_port.h"
 #include "crc16.h"
 
-#define VERSION "v.1.0"
+#define VERSION "v.1.1"
 
 #ifdef GCOM
 #define VERSION_EXTENDED VERSION "-" GCOM
@@ -42,6 +42,7 @@ char opWrite = 0;
 char opErase = 0;
 char opInfo = 0;
 char opVerify = 0;
+char opExecute = 0;
 
 char printSerialWhileWaiting = 0;
 int argStartBlock = -1;
@@ -70,6 +71,7 @@ static void printHelp() {
     printf("   w : write a file to flash chip, -f  option must be set\n");
     printf("   v : verify flash file, -f option must be set\n");
     printf("   e : erase the whole flash chip\n");
+    printf("   x : execute FPGA stream file, -f option must be set\n");
         printf("options:\n");
     printf("  -bs value : set starting block (1 block is 16kbytes)\n");
     printf("  -bc value : set block count (1 block is 16kbytes)\n");
@@ -90,7 +92,7 @@ static void printHelp() {
 }
 
 static int8_t verifyArgs() {
-    if (!opRead && !opWrite && !opErase && !opInfo && !opVerify) {
+    if (!opRead && !opWrite && !opErase && !opInfo && !opVerify && !opExecute) {
         printHelp();
         printf("Error: no command specified.\n");
         return -1;
@@ -99,7 +101,7 @@ static int8_t verifyArgs() {
         printf("Error: invalid command combination. Use either read or write operation in a separate step\n");
         return -1;
     }
-    if (0 == filename && (opWrite || opVerify)) {
+    if (0 == filename && (opWrite || opVerify || opExecute)) {
         printf("Error: missing a filename (param: -f fname)\n");
         return -1;
     }
@@ -162,6 +164,9 @@ static int8_t checkArgs(int argc, char** argv) {
             break;
         case 'i':
             opInfo = 1;
+            break;
+        case 'x':
+            opExecute = 1;
             break;
         default:
             printf("Error: unknown operation '%c' \n", modes[i]);
@@ -827,6 +832,70 @@ static void detectMultiBoot() {
     }
 }
 
+static char operationExecute() {
+    char buf[MAX_LINE];
+    int readSize;
+    int blocks;
+    char result = -1;
+    int fileSizeInBlocks;
+    int r;
+    char* response;
+
+    if (readFile(&readSize)) {
+        return -1;
+    }
+    if (readSize < 1) {
+        return -1;
+    }
+
+    if (openSerial() != 0) {
+        return -1;
+    }
+    
+    if (verbose) {
+        printf("Executing bitstream file\n");
+    }
+
+    fileSizeInBlocks = ((readSize + MAX_CHUNK - 1) / MAX_CHUNK);
+
+    if (fileSizeInBlocks > 64) {
+        printf("Error: executed file is too big\n");
+        result = -2;
+        goto finish;
+    }
+
+    detectMultiBoot();
+    if (!bootInfo.isFpga) {
+        printf("Error: executed file is not FPGA stream\n");
+        result = -3;
+        goto finish;
+    }
+
+    result = upload(fileBuffer, readSize, 0, readSize );
+    if (result < 0) {
+        printf("Error: upload failed\n");
+        goto finish;
+    }
+    sprintf(buf, "#x%08x\r", readSize);
+    r = sendLine(buf, 16, 6000);
+    if (r  < 1) {
+        printf("Error: execute timed out\n");
+        goto finish;
+    }
+    response = stripPrompt(buf);
+    if (verbose) {
+        printf("execute resp: %s\n", response);
+    }
+    if (response != NULL && (response[0] == 'O' && response[1] == 'K' && response[2] == ':')) {
+        result = 0;
+    } else {
+        printf("Error: stream execution failed.\n");
+    }
+finish:
+    closeSerial();
+    return result;
+}
+
 static char operationWriteOrVerify(char doWrite) {
     char buf[MAX_LINE];
     int readSize;
@@ -1104,6 +1173,8 @@ int main(int argc, char** argv) {
         } else if (opVerify) {
             // verification without writing
             result = operationWriteOrVerify(0);
+        } else if (opExecute) {
+            result = operationExecute();
         }
     }
 

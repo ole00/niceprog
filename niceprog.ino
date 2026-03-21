@@ -21,7 +21,7 @@
 
 #include <SPI.h>
 
-#define VERSION "1.0"
+#define VERSION "1.1"
 
 // ESP32 onboard LED
 #define PIN_LED 15
@@ -75,6 +75,7 @@
 #define CMD_VERIFY 'v'
 #define CMD_BOOT_SECTOR_CHECK 'b'
 #define CMD_BOOT_SECTOR_WRITE 'B'
+#define CMD_EXECUTE 'x'
 
 // upload buffer total size
 #define MAX_BUF (1 * 1024 * 1024)
@@ -167,7 +168,7 @@ void setup() {
     digitalWrite(PIN_RESET, LOW);
 
 
-    pinMode(PIN_CDONE, INPUT);
+    pinMode(PIN_CDONE, INPUT_PULLUP);
 
     pinMode(PIN_LED, OUTPUT);
 
@@ -505,6 +506,18 @@ void loop() {
                 Serial.flush();
                 DEBUG(("boot sector result: %04x\r\n", result));
             } break;
+
+            case CMD_EXECUTE:
+            {
+                uint32_t streamSize = parse4hex(2);
+                streamSize <<= 16;
+                streamSize |= parse4hex(6);
+                DEBUG(("Execute %d bytes\r\n", streamSize));
+                bool result = executeStream(streamSize);
+                Serial.printf("%s:\r\n>\r\n", result ? "OK" : "ER");
+                Serial.flush();
+                DEBUG(("Execute result=%d\r\n", result));
+            } break;
         }
         flashTime = micros();
     } else {
@@ -726,6 +739,33 @@ uint16_t checkOrCreateBootSectorIce40(uint8_t partIndex, uint16_t fileSizeBlocks
 
     // no boot sector found when checkOnly was requested
     return ERROR_NO_PARTITION;
+}
+
+bool executeStream(uint32_t streamSize) {
+    uint8_t done;
+
+    SPI.end(); //release SPI pins - we need to swap MOSI and MISO
+
+    digitalWrite(PIN_LED_R, 1);
+    digitalWrite(PIN_LED_G, 1);
+    digitalWrite(PIN_LED_B, 0);
+    delay(30);
+
+    SPI.begin(PIN_SCK, PIN_MOSI, PIN_MISO, PIN_CS); // swap MISO and MOSI pins
+    SPI.setDataMode(0);
+    SPI.setBitOrder(MSBFIRST);
+    SPI.setFrequency(10000000);
+
+    digitalWrite(PIN_CS, LOW); //SPI CS is asserted -> a signal for FPGA to act as a SPI slave
+    digitalWrite(PIN_RESET, HIGH); // start FPGA loading from MCU
+    delay(1);
+    SPI.writeBytes(data_buffer, streamSize);
+    delay(1);
+    //Pin CDONE should indicate the upload finished
+    done = digitalRead(PIN_CDONE);
+    DEBUG(("CDONE: %d\r\n", cdone));
+
+    return done == 1;
 }
 
 // write the whole uploaded buffer to flash
