@@ -12,7 +12,7 @@ FLASH SPI NOR MEmory via serial port
 #include "serial_port.h"
 #include "crc16.h"
 
-#define VERSION "v.1.1"
+#define VERSION "v.1.2"
 
 #ifdef GCOM
 #define VERSION_EXTENDED VERSION "-" GCOM
@@ -21,7 +21,7 @@ FLASH SPI NOR MEmory via serial port
 #endif
 
 #define MAX_FILE_SIZE (128 * 1024 * 2024)
-#define MAX_CHUNK (16*1024)
+//#define MAX_CHUNK (16*1024)
 #define MAX_LINE 256
 
 #define ERROR_INVALID_PARTITION    0xFFEB
@@ -29,6 +29,9 @@ FLASH SPI NOR MEmory via serial port
 #define ERROR_FLASH_ACCESS         0xFFFD
 #define ERROR_PARTITION_ALIGNMENT  0xFFFE
 #define ERROR_PARTITION_SMALL      0xFFFF
+
+static int maxUploadBuffer = 0;
+static int maxChunk = 0;
 
 char verbose = 0;
 char* filename = NULL;
@@ -245,7 +248,7 @@ static char readFile(int* fileSize) {
     }
     if (fileSize != NULL) {
         //pad the buffer with 0xFF
-        memset(fileBuffer + size, 0xFF, MAX_FILE_SIZE - size > MAX_CHUNK ? MAX_CHUNK : MAX_FILE_SIZE - size);
+        memset(fileBuffer + size, 0xFF, MAX_FILE_SIZE - size > maxChunk ? maxChunk : MAX_FILE_SIZE - size);
         if (verbose) {
             printf("file size: %d'\n", size);
         }
@@ -279,9 +282,9 @@ static char writeFile(int fileSize) {
     return 0;
 }
 
-static char checkForString(char* buf, int start, const char* key) {
+static int checkForString(char* buf, int start, const char* key) {
     int labelPos = strstr(buf + start, key) -  buf;
-    return (labelPos > 0 && labelPos < 500) ? 1 : 0;
+    return (labelPos > 0 && labelPos < 500) ? labelPos : -1;
 }
 
 static int openSerial(void) {
@@ -328,6 +331,31 @@ static int openSerial(void) {
         labelPos = strstr(buf, "niceprog v.") -  buf;
 
         if (labelPos >= 0 && labelPos < 500 && buf[total - 3] == '>') {
+            // check for MAX upload buffer size
+            int r = checkForString(buf, labelPos, "maxBuf=");
+            if (r > -1) {
+                maxUploadBuffer = parse4hex(buf + r + 7);
+                maxUploadBuffer <<= 16;
+                maxUploadBuffer |= parse4hex(buf + r + 7 + 4);
+            } else {
+                maxUploadBuffer = 1024 * 1024; //1 Mbyte
+            }
+            // check for CHUNK_SIZE value
+            r = checkForString(buf, labelPos, "chunkSize=");
+            if (r > -1) {
+                maxChunk = parse4hex(buf + r + 10);
+                maxChunk <<= 16;
+                maxChunk |= parse4hex(buf + r + 10 + 4);
+            } else {
+                maxChunk = 16 * 1024; //16 kbytes
+            }
+
+            if (verbose) {
+                printf("Board capabilities:\n");
+                printf("  maxBuf=%d\n", maxUploadBuffer);
+                printf("  maxChunk=%d\n", maxChunk);
+            }
+
             //all OK
             return 0;
         }
@@ -338,6 +366,7 @@ static int openSerial(void) {
         serialDeviceClose(serialF);
         serialF = INVALID_HANDLE;
     }
+    printf("Error: can't connect to target device. Identification failed.\n");
     return -4;
 }
 
@@ -485,7 +514,7 @@ static int sendBuffer(unsigned char* buf, int total) {
             writeSize = 0;
             retry --;
             if (retry == 0) {
-                printf("ERROR: written: %i (%s)\n", writeSize, strerror(errno));
+                printf("ERROR: sending buffer: %i (%s)\n", writeSize, strerror(errno));
                 return -4;
             } else {
                 usleep(10 * 1000);
@@ -635,20 +664,28 @@ static void decodeRle(unsigned char* dst, unsigned char* src, int encLen)
 static char upload(char* uploadBuffer, int uploadSize, int progressStart, int totalFileSize) {
     char fuseSet;
     char buf[MAX_LINE];
-    unsigned char rle[MAX_CHUNK];
-    unsigned char test[MAX_CHUNK];
+    unsigned char* rle;
+    unsigned char* test;
     char line[64];
     unsigned int i;
     unsigned char* dataBuff; //buffer to send
     int sendLen;
     int r;
+    char result = -1;
 
     // Start  upload
     if (verbose) {
         printf("Uploading file... uplSize=%d\n", uploadSize);
     }
+    rle = (unsigned char*) malloc(maxChunk);
+    test = (unsigned char*) malloc(maxChunk);
+    if (NULL == rle || NULL == test) {
+        printf("Failed to allocate upload buffers\n");
+        return -1;
+    }
+
     // send number of chunks
-    sprintf(buf, "#u%04X\r", (uploadSize  + MAX_CHUNK - 1 ) / MAX_CHUNK);
+    sprintf(buf, "#u%04X\r", (uploadSize  + maxChunk - 1 ) / maxChunk);
     sendLine(buf, MAX_LINE, 8000);
 
     for (i = 0; i < uploadSize;) {
@@ -657,24 +694,24 @@ static char upload(char* uploadBuffer, int uploadSize, int progressStart, int to
             printf("upload buffer: %02x %02x %02x %02x\n",
                 (uint8_t) uploadBuffer[i], (uint8_t)uploadBuffer[i+1], (uint8_t)uploadBuffer[i+2], (uint8_t)uploadBuffer[i+3]);
         }
-        int rleSize = encodeRle(rle, uploadBuffer + i, MAX_CHUNK);
+        int rleSize = encodeRle(rle, uploadBuffer + i, maxChunk);
         // sanity check - RLE verification
         if (rleSize > 1) {
             int j;
             unsigned char* dst = uploadBuffer + i;
             //printf("RLE: %d\n\n", rleSize);
             decodeRle(test, rle, rleSize);
-            for (j = 0; j < MAX_CHUNK; j++) {
+            for (j = 0; j < maxChunk; j++) {
                 if (test[j] != dst[j]) {
                     printf("!!! ERROR: RLE decode failed at %d\n\n", j);
-                    j = MAX_CHUNK;
+                    j = maxChunk;
                 }
             }
             dataBuff = rle;
             sendLen = rleSize;
         } else {
             dataBuff = uploadBuffer + i;
-            sendLen = MAX_CHUNK;
+            sendLen = maxChunk;
         }
         //calculate crc
         crc_t crc = crc_update(0, dataBuff, sendLen);
@@ -690,22 +727,25 @@ static char upload(char* uploadBuffer, int uploadSize, int progressStart, int to
             printf("Error: failed to upload file at offset: %d\n", i);
             return 1;
         }
-        i += MAX_CHUNK;
+        i += maxChunk;
 
         if (!verbose) {
             updateProgressBar("Upload: ", progressStart + i, totalFileSize);
         }
     }
-    //updateProgressBar("", fileSize, fileSize);
-    return 0;
+    result = 0;
+finish:
+    free(rle);
+    free(test);
+    return result;
 }
 
 static char downloadBlock(int block, int memBlockOffset ) {
     char buf[MAX_LINE];
     int r;
-    int total = MAX_CHUNK;
+    int total = maxChunk;
     int readSize;
-    int bufPos = (block + memBlockOffset) * MAX_CHUNK;;
+    int bufPos = (block + memBlockOffset) * maxChunk;
     char* response;
     crc_t passedCrc;
     crc_t crc;
@@ -731,9 +771,9 @@ static char downloadBlock(int block, int memBlockOffset ) {
             usleep(5 * 1000);
         }
     }
-    crc = crc_update(0, fileBuffer + bufPos - MAX_CHUNK, MAX_CHUNK);
+    crc = crc_update(0, fileBuffer + bufPos - maxChunk, maxChunk);
     //printf("block read finished crc:%04x\n", crc);
-    bufPos -= MAX_CHUNK;
+    bufPos -= maxChunk;
     //printf("%06x : %02x %02x %02x %02x \r\n\n", bufPos, fileBuffer[0], fileBuffer[1], fileBuffer[2], fileBuffer[3]);
     buf[0] = 0;
     waitForSerialPrompt(buf, MAX_LINE, 2000);
@@ -786,9 +826,10 @@ static int getChipTotalBlocks() {
     response = stripPrompt(buf);
     i = parse2hex(response + 14);
     i = 1 << i;
-    blocks = i / MAX_CHUNK;
+    blocks = i / maxChunk;
     if (verbose) {
-        printf("Chip size: %d mbytes. Chip block count: %d\n", i / (1024*1024), blocks);
+        printf("Chip size: %d mbytes. Chip block count: %d blockSize: %d %s\n", 
+            i / (1024*1024), blocks, maxChunk >= 1024 ? (maxChunk / 1024) : maxChunk, maxChunk >= 1024 ? "kbytes" : "");
     }
     return blocks;
 }
@@ -851,12 +892,17 @@ static char operationExecute() {
     if (openSerial() != 0) {
         return -1;
     }
-    
+    if (readSize > maxUploadBuffer) {
+        printf("Error: the board is limited to execute bitstream files up to %d bytes of size.\n", maxUploadBuffer);
+        result = -1;
+        goto finish;
+    }
+
     if (verbose) {
         printf("Executing bitstream file\n");
     }
 
-    fileSizeInBlocks = ((readSize + MAX_CHUNK - 1) / MAX_CHUNK);
+    fileSizeInBlocks = ((readSize + maxChunk - 1) / maxChunk);
 
     if (fileSizeInBlocks > 64) {
         printf("Error: executed file is too big\n");
@@ -907,6 +953,7 @@ static char operationWriteOrVerify(char doWrite) {
     char* response;
     uint32_t partBlock;
     int r;
+    int maxBlocks;
 
     if (readFile(&readSize)) {
         return -1;
@@ -924,7 +971,7 @@ static char operationWriteOrVerify(char doWrite) {
     // check whether the file has multiboot installed
     detectMultiBoot();
 
-    fileSizeInBlocks = ((readSize + MAX_CHUNK - 1) / MAX_CHUNK);
+    fileSizeInBlocks = ((readSize + maxChunk - 1) / maxChunk);
 
 
     if (verbose) {
@@ -1002,10 +1049,17 @@ static char operationWriteOrVerify(char doWrite) {
         printf("first block=%d total blocks=%d\n", firstBlock, blocks);
     }
 
+    // Check the first block is aligned to 32 kbytes boundary to prevent erasing existing contents.
+    if ((firstBlock * maxChunk) & 0x3FFF) {
+        printf("Error: write is not aligned to 32 kbyte boundary. Write may erase flash contents! Absolute address=0x%08x\n", (firstBlock * maxChunk));
+        goto finish;
+    }
+
+    maxBlocks = maxUploadBuffer / maxChunk;
     while (blocks) {
         // upload up to 1Mbyte
-        int b = blocks > 64 ? 64 : blocks;
-        int uploadSize = (b == 64) ? 64 * MAX_CHUNK : readSize - fileBufferPos;
+        int b = blocks > maxBlocks ? maxBlocks : blocks;
+        int uploadSize = (b == maxBlocks) ? maxBlocks * maxChunk : readSize - fileBufferPos;
 
         result = upload(fileBuffer + fileBufferPos, uploadSize, fileBufferPos, readSize );
         if (result < 0) {
@@ -1013,12 +1067,12 @@ static char operationWriteOrVerify(char doWrite) {
         }
 
         if (verbose) {
-            printf("write/verify at block: %d\n",  firstBlock + (fileBufferPos / MAX_CHUNK));
+            printf("write/verify at block: %d\n",  firstBlock + (fileBufferPos / maxChunk));
         }
 
         // write command
         if (doWrite) {
-            sprintf(buf, "#w%04x\r", firstBlock + (fileBufferPos / MAX_CHUNK));
+            sprintf(buf, "#w%04x\r", firstBlock + (fileBufferPos / maxChunk));
             result = sendGenericCommand(buf, "write failed ?", 8000, 0);
             if (result) {
                 goto finish;
@@ -1027,15 +1081,16 @@ static char operationWriteOrVerify(char doWrite) {
 
         // verify command
         if (opVerify) {
-            sprintf(buf, "#v%04x\r", firstBlock + (fileBufferPos / MAX_CHUNK));
+            sprintf(buf, "#v%04x\r", firstBlock + (fileBufferPos / maxChunk));
             result = sendGenericCommand(buf, "verify failed ?", 8000, 0);
             if (result) {
                 goto finish;
             }
         }
-        fileBufferPos += (b * MAX_CHUNK);
+        fileBufferPos += (b * maxChunk);
         blocks -= b;
     }
+    result = 0;
 finish:
     closeSerial();
     return result;
@@ -1085,6 +1140,7 @@ static char operationReadFlash(void) {
     int firstBlock = 0;
     int blocks;
     int totalBlocks;
+    int maxBlocks;
 
     if (openSerial() != 0) {
         return -1;
@@ -1097,6 +1153,7 @@ static char operationReadFlash(void) {
         }
     }
 
+    // number of flash chip blocks
     blocks = getChipTotalBlocks();
 
 
@@ -1119,9 +1176,10 @@ static char operationReadFlash(void) {
         totalBlocks = blocks;
     }
 
+    maxBlocks = maxUploadBuffer / maxChunk;
     while (blocks) {
-        // read up to 1Mbyte
-        int b = blocks > 64 ? 64 : blocks;
+        // read data up to the boards' internal buffer size
+        int b = blocks > maxBlocks ? maxBlocks : blocks;
         //READ command
         sprintf(buf, "#r%04x%04x\r", firstBlock, b);
         readSize = sendLine(buf, MAX_LINE, 22000);
@@ -1130,12 +1188,12 @@ static char operationReadFlash(void) {
         }
         for (i = 0; i < b; i++) {
             result = downloadBlock(i, totalBlocks-blocks);
-            updateProgressBar("Read  : ", (totalBlocks - blocks + i + 1) * MAX_CHUNK, totalBlocks * MAX_CHUNK);
+            updateProgressBar("Read  : ", (totalBlocks - blocks + i + 1) * maxChunk, totalBlocks * maxChunk);
         }
         firstBlock += b;
         blocks -= b;
     }
-    writeFile(totalBlocks * MAX_CHUNK);
+    writeFile(totalBlocks * maxChunk);
     result = 0;
 finish:
     closeSerial();

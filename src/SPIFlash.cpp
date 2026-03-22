@@ -31,7 +31,7 @@
  #define ALT_BOARD 1
 #else
  #define ALT_BOARD 0
- #if defined(CONFIG_IDF_TARGET_ESP32S2)
+ #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     #define _delay_us(us) delayMicroseconds(us)
  #else
     #include <util/delay.h>

@@ -21,7 +21,30 @@
 
 #include <SPI.h>
 
-#define VERSION "1.1"
+#define VERSION "1.2"
+
+//=== USB Check ==============================
+#if ARDUINO_USB_CDC_ON_BOOT == 0
+#error USB CDC On Boot is Disabled. Enable it in Tools menu.
+#endif
+
+//=== BOARD Config =============================
+
+//--- ESP32-S2 : Wemos Mini S2 ----------------
+#ifdef CONFIG_IDF_TARGET_ESP32S2
+
+#define BOARD_MIN_BUF (160 * 1024)
+
+// 1: use a static array 0: use malloc (for PSRAM)
+#define STATIC_MALLOC 0
+
+// ESP32-S2 has limited internal ram
+#ifdef BOARD_HAS_PSRAM
+    #define BOARD_MAX_CHUNK (16 *1024)
+#else
+    #define BOARD_MAX_CHUNK (8 *1024)
+#endif
+
 
 // ESP32 onboard LED
 #define PIN_LED 15
@@ -50,6 +73,49 @@
 #define PIN_SERIAL_RX 2
 #define PIN_SERIAL_TX 1
 
+#elif CONFIG_IDF_TARGET_ESP32S3
+//--- ESP32-S3 : Wemos Mini S3 ----------------
+
+// 1: use a static array 0: use malloc (for PSRAM)
+#define STATIC_MALLOC 0
+
+#define BOARD_MIN_BUF (160 * 1024)
+#define BOARD_MAX_CHUNK (16 *1024)
+
+// ESP32 onboard LED
+#define PIN_LED 47
+
+// niceprog RGB LED
+#define PIN_LED_B 4
+#define PIN_LED_R 6
+#define PIN_LED_G 12
+
+// CDONE is raised high when FPGA finishes loading the design from flash
+#define PIN_CDONE 8
+
+// RESET keps the FPGA IC in reset state so that the flash IC can be reprogrammed
+#define PIN_RESET 7
+
+// can be used to drive MOSfet to power your FPGA board
+#define PIN_UEXT_POWER 13
+
+// SPI flash pins
+#define PIN_CS  9
+#define PIN_SCK 38
+#define PIN_MISO 44
+#define PIN_MOSI 36
+
+// for external serial port connected to either FPGA or other device
+#define PIN_SERIAL_RX 3
+#define PIN_SERIAL_TX 1
+
+#else
+    #error Unsupported board.
+#endif
+
+// ====================================================================
+
+
 #include "src/SPIFlash.h"
 #include "src/crc16.h"
 
@@ -77,11 +143,28 @@
 #define CMD_BOOT_SECTOR_WRITE 'B'
 #define CMD_EXECUTE 'x'
 
-// upload buffer total size
-#define MAX_BUF (1 * 1024 * 1024)
+// Upload buffer total size - allocation of that size is tried first
+// and if it fails, then the MIN_BUF size is tried to allocate.
+#define MAX_BUF (512 * 1024)
+// Minimum size so that the ICE40HX8 can execute a bit stream.
+// If you don't need to execute bit stream, then this size can
+// be much smaller, down to 256 bytes (MAX_CHUNK must be also 256 bytes in such case).
+// At 256 bytes, all operations wil lbe very slow, but functional.
+#define MIN_BUF BOARD_MIN_BUF
 
-// max chunk size during upload
-#define MAX_CHUNK (16*1024)
+// The chunk size during upload and download.
+// Do not make less than 256 bytes.
+// smaller chunk sizes dramatically reduce speed of read/write operations
+#define MAX_CHUNK BOARD_MAX_CHUNK
+
+// Considerations for selecting the right MIN_BUF and MAX_CHUNK values:
+// * ensure both fill the available RAM of your MCE as much as possible (that still ensures reliable operation)
+// * large value of MAX_CHUNK is more important than large value of MIN_BUF, therefore - if for example your MCU
+//   has total of 64 kbytes, then it is better to have MIN_BUF=32kb and MAX_CHUNK=16kb
+//   than to have MIN_BUF=48kb and MAX_CHUNK=1kb. 
+// * Sizes of MAX_CHUNK larger than 16 kBytes bring very small speed improvements.
+// * The smallest possible configuration is MIN_BUF=256 bytes and MAX_CHUNK=256 bytes
+//   possibly fitting the MCU with only 2kbytes or RAM.
 
 // in micro seconds
 #define MAX_FLASH_IDLE_TIME 200000
@@ -99,7 +182,13 @@
 // instatiate the SPIFlash library object and pass the SPI pins
 SPIFlash flash(PIN_CS);
 
+uint32_t maxBuf;
+uint16_t maxBufChunks;
+#if STATIC_MALLOC
+uint8_t data_buffer[MIN_BUF];
+#else
 uint8_t* data_buffer;
+#endif
 char line[32];
 short lineIndex;
 char endOfLine;
@@ -201,18 +290,31 @@ void setup() {
 
     readGarbage(); // read bytes from serial port that may still be in the buffer
 
-    // allocate download buffer
+#if STATIC_MALLOC
+    maxBuf = MIN_BUF;
+#else
+    // allocate download buffer on heap (presumably on PSRAM if it is available)
     data_buffer = (uint8_t*) malloc(MAX_BUF);
     if (NULL == data_buffer) {
-        DEBUG(("can't malloc buffer\r\n"));
-        // mark an erro by flashing the onboard LED
-        while(1) {
-            delay(100);
-            digitalWrite(PIN_LED,0);
-            delay(100);
-            digitalWrite(PIN_LED,1);
+        // no PSRAM available? try to allocate the minimum buffer
+        data_buffer = (uint8_t*) malloc(MIN_BUF);
+        if (NULL == data_buffer) {
+            DEBUG(("can't malloc buffer\r\n"));
+            // mark an erro by flashing the onboard LED
+            while(1) {
+                delay(100);
+                digitalWrite(PIN_LED,0);
+                delay(100);
+                digitalWrite(PIN_LED,1);
+            }
+        } else {
+            maxBuf = MIN_BUF;
         }
+    } else {
+        maxBuf = MAX_BUF;
     }
+#endif
+    maxBufChunks = maxBuf / MAX_CHUNK;
     DEBUG(("niceprog ready\r\n"));
 }
 
@@ -406,9 +508,10 @@ void loop() {
             case CMD_PROMPT:
                 DEBUG(("prompt"));
                 uploading = 0;
-                Serial.printf("niceprog v." VERSION);
-                //TODO - print max upload buffer size and max chunk size for portability reasons ?
-                Serial.printf("\r\n>\r\n");
+                Serial.printf("niceprog v." VERSION "\r\n");
+                Serial.printf("maxBuf=%08x\r\n", maxBuf);
+                Serial.printf("chunkSize=%08x\r\n", MAX_CHUNK);
+                Serial.printf(">\r\n");
             break;
 
             case CMD_UPLOAD:
@@ -783,8 +886,13 @@ bool writeAll(uint32_t wrBlock) {
     flash.powerUp();
 
     DEBUG(("Erase addr=%06x\r\n", eraseAddress));
-    //erase the block before writing
-    flash.eraseBlock32K(eraseAddress);
+
+    // Special handling for MCU memory configurations where the upload buffer is less than 32 kbytes.
+    // In that case we might be erasing portions of flash that were previously written to.
+    if ((wrAddress & 0x7F) == 0) { // this check actually does: (wrBlock * MAX_CHUNK) & 0x7FFF;
+        //erase the block before writing
+        flash.eraseBlock32K(eraseAddress);
+    }
     eraseAddress += (32 * 1024); //calculate next erase address;
 
 
