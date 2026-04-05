@@ -889,7 +889,7 @@ bool executeStream(uint32_t streamSize) {
     delay(1);
     //Pin CDONE should indicate the upload finished
     done = digitalRead(PIN_CDONE);
-    DEBUG(("CDONE: %d\r\n", cdone));
+    DEBUG(("CDONE: %d\r\n", done));
 
     return done == 1;
 }
