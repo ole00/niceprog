@@ -21,7 +21,7 @@
 
 #include <SPI.h>
 
-#define VERSION "1.2"
+#define VERSION "1.3"
 
 //=== USB Check ==============================
 #if ARDUINO_USB_CDC_ON_BOOT == 0
