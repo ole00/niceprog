@@ -490,8 +490,11 @@ static int waitForSerialPrompt(char* buf, int bufSize, int maxDelay) {
 #else
             maxDelay -= 30;
 #endif
-            if(maxDelay <= 0 && verbose) {
-                printf("waitForSerialPrompt timed out\n");
+            if(maxDelay <= 0) {
+                if (verbose) {
+                    printf("waitForSerialPrompt timed out\n");
+                }
+                return -1;
             }
         }
     }
@@ -835,7 +838,7 @@ char sendGenericCommand(const char* command, const char* errorText, int maxDelay
     return 0;
 }
 
-static int getChipTotalBlocks() {
+static int getChipTotalBlocks(int* sizeMb) {
     char buf[MAX_LINE];
     int readSize;
     char* response;
@@ -856,6 +859,9 @@ static int getChipTotalBlocks() {
     if (verbose) {
         printf("Chip size: %d mbytes. Chip block count: %d blockSize: %d %s\n", 
             i / (1024*1024), blocks, maxChunk >= 1024 ? (maxChunk / 1024) : maxChunk, maxChunk >= 1024 ? "kbytes" : "");
+    }
+    if (NULL != sizeMb) {
+        *sizeMb = (int)(i / (1024*1024));
     }
     return blocks;
 }
@@ -992,7 +998,7 @@ static char operationWriteOrVerify(char doWrite) {
         return -1;
     }
 
-    blocks = getChipTotalBlocks();
+    blocks = getChipTotalBlocks(NULL);
 
     // check whether the file has multiboot installed
     detectMultiBoot();
@@ -1143,16 +1149,28 @@ static char operationReadInfo(void) {
 static char operationErase(void) {
     char buf[MAX_LINE];
     int readSize;
-    char result;
+    char result = -1;
+    int blocks;
+    int sizeMb;
 
     if (openSerial() != 0) {
         return -1;
     }
+
+    blocks = getChipTotalBlocks(&sizeMb);
+    if (blocks < 1) {
+        printf("Error: can't get device size.\n");
+        goto finish;
+    }
     if (verbose) {
         printf("sending 'e' command...\n");
     }
-    result = sendGenericCommand("#e\r", "erase failed ?", 16000, 0);
-
+    // wait about 8 * size-in-megabytes seconds
+    result = sendGenericCommand("#e\r", "erase failed ?", 8000 * sizeMb, 0);
+    if (result) {
+        printf("Error: erase failed\n");
+    }
+finish:
     closeSerial();
     return result;
 }
@@ -1180,7 +1198,7 @@ static char operationReadFlash(void) {
     }
 
     // number of flash chip blocks
-    blocks = getChipTotalBlocks();
+    blocks = getChipTotalBlocks(NULL);
 
 
     totalBlocks = blocks;
