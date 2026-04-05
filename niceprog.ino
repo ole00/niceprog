@@ -527,6 +527,7 @@ void loop() {
                 Serial.printf("maxBuf=%08x\r\n", maxBuf);
                 Serial.printf("chunkSize=%08x\r\n", MAX_CHUNK);
                 Serial.printf(">\r\n");
+                Serial.flush();
             break;
 
             case CMD_UPLOAD:
@@ -535,7 +536,8 @@ void loop() {
                 uploadSize *= MAX_CHUNK;
                 uploadPos = 0;
                 uploadChunkPos = 0;
-                Serial.printf(">\r\n"); Serial.flush();
+                Serial.printf(">\r\n");
+                Serial.flush();
                 DEBUG(("total size=%d line=%s\r\n", uploadSize, line));
             break;
 
@@ -544,7 +546,8 @@ void loop() {
                 chunkLen = parse4hex(6);
                 uploading = 1;
                 uploadChunkPos = 0;
-                Serial.printf(">\r\n"); Serial.flush();
+                Serial.printf(">\r\n");
+                Serial.flush();
                 DEBUG(("chunk crc=%04x line=%s\r\n", chunkCrc, line));
             break;
 
@@ -554,7 +557,8 @@ void loop() {
                 DEBUG(("read flash block=%d blkcnt=%d\r\n", startBlock, blockCount));
                 readBlocks(startBlock, blockCount, 0);
 
-                Serial.printf("OK\r\n>\r\n"); Serial.flush();
+                Serial.printf("OK\r\n>\r\n");
+                Serial.flush();
                 DEBUG(("read flash done\r\n"));
             }
             break;
@@ -574,7 +578,8 @@ void loop() {
                     dlOffset += w;
                     //DEBUG(("  wr:%d / %d\r\n", w, total));
                 }
-                Serial.printf(">\r\n"); Serial.flush();
+                Serial.printf(">\r\n");
+                Serial.flush();
                 DEBUG(("dl finished\r\n"));
             }
             break;
@@ -583,19 +588,22 @@ void loop() {
                 bool result;
                 DEBUG(("Full erase\r\n"));
                 result = eraseAll();
-                Serial.printf("%s\r\n>\r\n", result ? "OK" : "ER:"); Serial.flush();
+                Serial.printf("%s\r\n>\r\n", result ? "OK" : "ER:");
+                Serial.flush();
                 DEBUG(("erase result: %s\r\n", result ? "OK" : "failed:"));
             } break;
 
             case CMD_READ_ID:
                 DEBUG(("read ID\r\n"));
                 Serial.printf("JDEC Id=%08x\r\n>\r\n", chipId);
+                Serial.flush();
             break;
 
             case CMD_WRITE: {
                 uint32_t wrBlock = parse4hex(2);
                 bool result = writeAll(wrBlock);
-                Serial.printf("%s\r\n>\r\n", result ? "OK" : "ER:write failed"); Serial.flush();
+                Serial.printf("%s\r\n>\r\n", result ? "OK" : "ER:write failed");
+                Serial.flush();
                 DEBUG(("write result: %s\r\n", result ? "OK" : "failed:"));
             }
             break;
