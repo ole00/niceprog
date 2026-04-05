@@ -750,12 +750,15 @@ static char downloadBlock(int block, int memBlockOffset ) {
     char* response;
     crc_t passedCrc;
     crc_t crc;
+    int maxWait = 10;
 
-    //printf("downloading block %d, physical block %d\n", block, block + memBlockOffset);
+    if (verbose) {
+        printf("downloading block %d, physical block %d\n", block, block + memBlockOffset);
+    }
     sprintf(buf, "#d%04X\r", block);
     r = sendLine(buf, 12, 8000);
     if (r  < 1) {
-        printf("Error: download timed out\n");
+        printf("Error: download timed out.\n");
         return -1;
     }
     response = stripPrompt(buf);
@@ -769,8 +772,19 @@ static char downloadBlock(int block, int memBlockOffset ) {
             //printf("Read %d, total=%d\n", readSize, total); fflush(0);
             bufPos += readSize;
             total -= readSize;
+            maxWait = 10;
         } else {
             usleep(5 * 1000);
+            maxWait--;
+            if (0 == maxWait) {
+                if (verbose) {
+                    printf("Error: read failed\n");
+                }
+                break; //crc should fail
+            }
+            if (verbose) {
+                printf("  .... wait... %d\n", readSize);
+            }
         }
     }
     crc = crc_update(0, fileBuffer + bufPos - maxChunk, maxChunk);
@@ -1190,13 +1204,19 @@ static char operationReadFlash(void) {
         }
         for (i = 0; i < b; i++) {
             result = downloadBlock(i, totalBlocks-blocks);
-            updateProgressBar("Read  : ", (totalBlocks - blocks + i + 1) * maxChunk, totalBlocks * maxChunk);
+            if (result < 0) {
+                goto finish;
+            }
+            if (!verbose) {
+                updateProgressBar("Read  : ", (totalBlocks - blocks + i + 1) * maxChunk, totalBlocks * maxChunk);
+            }
         }
         firstBlock += b;
         blocks -= b;
     }
-    writeFile(totalBlocks * maxChunk);
-    result = 0;
+    if (0 == result) {
+        writeFile(totalBlocks * maxChunk);
+    }
 finish:
     closeSerial();
     return result;
