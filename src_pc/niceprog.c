@@ -521,7 +521,9 @@ static int sendBuffer(unsigned char* buf, int total) {
                 usleep(10 * 1000);
             }
         } else if (writeSize > 0) {
-            //printf("written: %d / %d\n", writeSize, total);
+            if (verbose) {
+                printf("written: %d / %d\n", writeSize, total);
+            }
             retry = 5;
         }
         buf += writeSize;
@@ -716,6 +718,9 @@ static char upload(char* uploadBuffer, int uploadSize, int progressStart, int to
         }
         //calculate crc
         crc_t crc = crc_update(0, dataBuff, sendLen);
+        if (verbose) {
+            printf(" sending command #c%04X%04X\n", crc,sendLen);
+        }
         sprintf(buf, "#c%04X%04X\r", crc, sendLen);
 
         r = sendLine(buf, MAX_LINE, 8000);
@@ -767,9 +772,14 @@ static char downloadBlock(int block, int memBlockOffset ) {
 
     while (total > 0) {
         int rs = total > 1024 ? 1024 : total;
+        if (verbose) {
+            printf(" Reading %d/%d bytes...\n", rs, total);
+        }
         readSize = serialDeviceRead(serialF, fileBuffer + bufPos, rs);
         if (readSize > 0) {
-            //printf("Read %d, total=%d\n", readSize, total); fflush(0);
+            if (verbose) {
+                printf("  Read %d, total=%d\n", readSize, total); fflush(0);
+            }
             bufPos += readSize;
             total -= readSize;
             maxWait = 10;
@@ -1197,6 +1207,9 @@ static char operationReadFlash(void) {
         // read data up to the boards' internal buffer size
         int b = blocks > maxBlocks ? maxBlocks : blocks;
         //READ command
+        if (verbose) {
+            printf("Sending command #r%04x%04x\n", firstBlock, b);
+        }
         sprintf(buf, "#r%04x%04x\r", firstBlock, b);
         readSize = sendLine(buf, MAX_LINE, 22000);
         if (readSize < 0)  {
