@@ -68,6 +68,8 @@
 #define PIN_SCK 36
 #define PIN_MISO 37
 #define PIN_MOSI 35
+#define PIN_WP   39
+#define PIN_HOLD 17
 
 // for external serial port connected to either FPGA or other device
 #define PIN_SERIAL_RX 2
@@ -104,6 +106,8 @@
 #define PIN_SCK 38
 #define PIN_MISO 44
 #define PIN_MOSI 36
+#define PIN_WP   43
+#define PIN_HOLD 17
 
 // for external serial port connected to either FPGA or other device
 #define PIN_SERIAL_RX 3
@@ -210,6 +214,10 @@ void setupMode() {
         SPI.end(); //release SPI pins
         digitalWrite(PIN_CS, HIGH); //SPI CS is deasserted
         digitalWrite(PIN_RESET, HIGH); // start FPGA loading from flash
+
+        pinMode(PIN_WP, INPUT_PULLUP);
+        pinMode(PIN_HOLD, INPUT_PULLUP);
+
         
         digitalWrite(PIN_LED_G, 0);
         digitalWrite(PIN_LED_B, 1);
@@ -219,6 +227,13 @@ void setupMode() {
         pinMode(PIN_CS, OUTPUT);
         digitalWrite(PIN_CS, HIGH); //SPI CS is deasserted
         digitalWrite(PIN_RESET, LOW); // keep FPGA in reset
+
+        // Write Protect and Hold/Reset pins need to be kept high
+        pinMode(PIN_WP, OUTPUT);
+        pinMode(PIN_HOLD, OUTPUT);
+        digitalWrite(PIN_WP, HIGH);
+        digitalWrite(PIN_HOLD, HIGH);
+
 
     	SPI.begin(PIN_SCK, PIN_MISO, PIN_MOSI, PIN_CS);
         SPI.setDataMode(0);
