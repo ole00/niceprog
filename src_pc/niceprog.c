@@ -509,7 +509,8 @@ static int sendBuffer(unsigned char* buf, int total) {
     // write the buffer to the serial port's file
     // file is opened non blocking so we have to ensure all contents is written
     while (total > 0) {
-        writeSize = serialDeviceWrite(serialF, buf, total);
+        int block = total > 1024 ? 1024 : total;
+        writeSize = serialDeviceWrite(serialF, buf, block);
         if (writeSize < 0) {
             writeSize = 0;
             retry --;
@@ -762,7 +763,8 @@ static char downloadBlock(int block, int memBlockOffset ) {
     //printf("resp: '%s'\n", response); fflush(0);
 
     while (total > 0) {
-        readSize = serialDeviceRead(serialF, fileBuffer + bufPos, total > 1024 ? 1024 : total);
+        int rs = total > 1024 ? 1024 : total;
+        readSize = serialDeviceRead(serialF, fileBuffer + bufPos, rs);
         if (readSize > 0) {
             //printf("Read %d, total=%d\n", readSize, total); fflush(0);
             bufPos += readSize;
