@@ -33,6 +33,9 @@
 //--- ESP32-S2 : Wemos Mini S2 ----------------
 #ifdef CONFIG_IDF_TARGET_ESP32S2
 
+// ESP32-S2 does not need USB_TINY - it is fully capable of USB CDC
+#define USE_USB_TINY 0
+
 #define BOARD_MIN_BUF (160 * 1024)
 
 // 1: use a static array 0: use malloc (for PSRAM)
@@ -77,6 +80,12 @@
 
 #elif CONFIG_IDF_TARGET_ESP32S3
 //--- ESP32-S3 : Wemos Mini S3 ----------------
+
+#if !ARDUINO_USB_ON_BOOT
+#error USB-OTG is not enabled in 'tools->USB Mode' menu. Please enable it.
+#endif
+// ESP32-S3 needs USB_TINY - it is not fully capable of using Serial over Hardware USB CDC
+#define USE_USB_TINY 1
 
 // 1: use a static array 0: use malloc (for PSRAM)
 #define STATIC_MALLOC 0
@@ -271,7 +280,6 @@ void setup() {
     // keep FPGA in reset state
     digitalWrite(PIN_RESET, LOW);
 
-
     pinMode(PIN_CDONE, INPUT_PULLUP);
 
     pinMode(PIN_LED, OUTPUT);
@@ -285,6 +293,11 @@ void setup() {
     pinMode(PIN_LED_G,OUTPUT);
     pinMode(PIN_LED_B,OUTPUT);
 
+#if USE_USB_TINY
+    USB.begin();
+    Serial.setRxBufferSize(2048);
+    Serial.setTxTimeoutMs(100);
+#endif
     Serial.begin(115200);
 
     // setup the external serial port
@@ -469,6 +482,7 @@ static void decodeRle(unsigned char* dst, unsigned char* src, int encLen)
 // in idle mode the USB serial is used as a pass trough for the external TTL UART serial
 static char handleIdleMode() {
     uint8_t buf[256];
+    uint8_t wait = 4;
 
     // read from external TTL UART and write to USB UART
     int len = Serial1.available();
@@ -483,19 +497,28 @@ static char handleIdleMode() {
     // read from USB UART and write to external TTL UART
     len = Serial.available();
     if (len > 0) {
-        len = Serial.read(buf, len);
-        if (len > 0) {
-            DEBUG(("rec: %d\n", len));
-            // check for magic - when detected then switch to flash mode
-            if (0 == strncmp("#*\t*nice\tprog#\r", (const char*)buf, 15)) {
-                mode = MODE_FLASH;
-                setupMode();
-                readGarbage();
-                return CMD_PROMPT;
-            } else {
-                Serial1.write(buf, len);
-                Serial1.flush();
+#if USE_USB_TINY
+        if (wait && len < 16) {
+            wait--;
+            delay(1);
+        } else
+#endif
+        {
+            len = Serial.read(buf, len);
+            if (len > 0) {
+                DEBUG(("rec: %d\n", len));
+                // check for magic - when detected then switch to flash mode
+                if (0 == strncmp("#*\t*nice\tprog#\r", (const char*)buf, 15)) {
+                    mode = MODE_FLASH;
+                    setupMode();
+                    readGarbage();
+                    return CMD_PROMPT;
+                } else {
+                    Serial1.write(buf, len);
+                    Serial1.flush();
+                }
             }
+            wait = 4;
         }
     }
     return CMD_NONE;
