@@ -221,7 +221,7 @@ char handleTerminalCommands();
 void setupMode() {
     if (MODE_IDLE == mode) {
         SPI.end(); //release SPI pins
-        digitalWrite(PIN_CS, HIGH); //SPI CS is deasserted
+        pinMode(PIN_CS, INPUT_PULLUP); //SPI CS is deasserted
         digitalWrite(PIN_RESET, HIGH); // start FPGA loading from flash
 
         pinMode(PIN_WP, INPUT_PULLUP);
