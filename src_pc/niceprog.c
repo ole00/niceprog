@@ -12,7 +12,7 @@ FLASH SPI NOR MEmory via serial port
 #include "serial_port.h"
 #include "crc16.h"
 
-#define VERSION "v.1.3"
+#define VERSION "v.1.4"
 
 #ifdef GCOM
 #define VERSION_EXTENDED VERSION "-" GCOM
