@@ -8,6 +8,8 @@ It can be adapted for other ESP32 boards.
 The MCU software uses Arduino SPIFlash library by Prajwal Bhattaram (the required version is included in src directory).
 
 Features:
+---------------------
+
 * communicates via USB CDC serial line
 * uses RLE compression for faster upload of bitstreams
 * uses CRC checks for data transfers
@@ -24,7 +26,7 @@ Performance:
 * writes and verifies simple IC40HX8k streams (~132 kbytes) in less than 3 seconds.
 * executes a simple IC40HX8k stream (~132 kbytes) in about a second.
 
-How it work:
+How it works:
 ---------------------
 Niceprog has 3 parts, all are located in this repo:
 * PC app - sources in src_pc directory. Compile it in Linux by supplied shell scripts. Run the PC app without parameters to view options
