@@ -506,7 +506,7 @@ static char handleIdleMode() {
         {
             len = Serial.read(buf, len);
             if (len > 0) {
-                DEBUG(("rec: %d\n", len));
+                DEBUG(("rec: %d\r\n", len));
                 // check for magic - when detected then switch to flash mode
                 if (0 == strncmp("#*\t*nice\tprog#\r", (const char*)buf, 15)) {
                     mode = MODE_FLASH;
@@ -544,7 +544,7 @@ void loop() {
         DEBUG(("command=%c\r\n", command));
         switch (command) {
             case CMD_PROMPT:
-                DEBUG(("prompt"));
+                DEBUG(("prompt\r\n"));
                 uploading = 0;
                 Serial.printf("niceprog v." VERSION "\r\n");
                 Serial.printf("maxBuf=%08x\r\n", maxBuf);
