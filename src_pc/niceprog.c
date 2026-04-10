@@ -123,6 +123,8 @@ static int8_t checkArgs(int argc, char** argv) {
             type = argv[i];
         } else if (strcmp("-v", param) == 0) {
             verbose = 1;
+        } else if (strcmp("-vv", param) == 0) {
+            verbose = 2;
         } else if (strcmp("-f", param) == 0) {
             i++;
             filename = argv[i];
@@ -326,6 +328,9 @@ static int openSerial(void) {
         //read programmer's message
         total = waitForSerialPrompt(buf, 512, 200);
         buf[total] = 0;
+        if (verbose > 1) {
+            printf("total read: %d\n", total);
+        }
 
         //check we are communicating with Niceprog programmer
         labelPos = strstr(buf, "niceprog v.") -  buf;
@@ -464,8 +469,18 @@ static int waitForSerialPrompt(char* buf, int bufSize, int maxDelay) {
     
     memset(buf, 0, bufSize);
 
+    if (verbose == 2) {
+        printf(" => waitForSerialPrompt timeout: %d\n", maxDelay);
+    }
+
     while (maxDelay > 0) {
+        if (verbose == 2) {
+            printf(" ... read ...\n");
+        }
         readSize = serialDeviceRead(serialF, buf, bufSize);
+        if (verbose == 2) {
+            printf(" ... read done size: %d\n", readSize);
+        }
         if (readSize > 0) {
             bufPos += readSize;
             if (checkPromptExists(bufStart, bufTotal) >= 0) {
