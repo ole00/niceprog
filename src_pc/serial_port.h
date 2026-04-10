@@ -89,27 +89,28 @@ static inline SerialDeviceHandle serialDeviceOpen(char* deviceName) {
             return INVALID_HANDLE;
         }
 
-        dcbSerialParams.BaudRate = CBR_57600; // Setting BaudRate
+        dcbSerialParams.BaudRate = CBR_115200; // Setting BaudRate
         dcbSerialParams.ByteSize = 8;         // Setting ByteSize = 8
         dcbSerialParams.StopBits = ONESTOPBIT;// Setting StopBits = 1
         dcbSerialParams.Parity   = NOPARITY;  // Setting Parity = None
         dcbSerialParams.fOutxCtsFlow = FALSE;
         dcbSerialParams.fOutxDsrFlow = FALSE;
-        dcbSerialParams.fDtrControl = DTR_CONTROL_DISABLE;
+        dcbSerialParams.fDtrControl = DTR_CONTROL_ENABLE; //Required for USB CDC Serial ports
         dcbSerialParams.fOutX = FALSE;
         dcbSerialParams.fInX = FALSE;
-        dcbSerialParams.fRtsControl = RTS_CONTROL_DISABLE;
+        dcbSerialParams.fRtsControl = RTS_CONTROL_ENABLE; //Required for USB CDC Serial ports
         dcbSerialParams.fBinary = TRUE;
-        
+        dcbSerialParams.fDsrSensitivity = FALSE;
+        dcbSerialParams.fNull = FALSE;
 
         result = SetCommState(h, &dcbSerialParams);
         if (!result) {
             return INVALID_HANDLE;
         }
 
-        timeouts.ReadIntervalTimeout         = 30; // in milliseconds
+        timeouts.ReadIntervalTimeout         = 0; // in milliseconds
         timeouts.ReadTotalTimeoutConstant    = 30; // in milliseconds
-        timeouts.ReadTotalTimeoutMultiplier  = 10; // in milliseconds
+        timeouts.ReadTotalTimeoutMultiplier  = 0; // in milliseconds
         timeouts.WriteTotalTimeoutConstant   = 50; // in milliseconds
         timeouts.WriteTotalTimeoutMultiplier = 10; // in milliseconds
 
@@ -252,8 +253,8 @@ static inline SerialDeviceHandle serialDeviceOpen(char* deviceName) {
         struct termios serial;
 
         memset(&serial, 0, sizeof(struct termios));
-        cfsetispeed(&serial, B57600);
-        cfsetospeed(&serial, B57600);
+        cfsetispeed(&serial, B115200);
+        cfsetospeed(&serial, B115200);
 
         serial.c_cflag |= CS8; // no parity, 1 stop bit
         serial.c_cflag |= CREAD | CLOCAL;
