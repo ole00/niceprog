@@ -37,7 +37,10 @@ Niceprog has 3 parts, all are located in this repo:
   and enable "USB CDC on boot" option in Tools top menu. See bellow for recommended Arduino IDE parameters.
 * Optional PCB that breaks out the connection to a programming header. The header works with Olimex ICE40HX8K-EVB.
   See see design and gerbers folders for more info. You can also connect your FPGA board directly to S2 Mini or S3 Mini
-  by Dupont wires if you prefer to.
+  by Dupont wires if you prefer to. The S3 mini is connected via the same pins as S2 mini, the correct IO mapping is done in Arduino sketch.
+  The direct wiring diagram is as follows:
+<p align="center"><img src="https://github.com/ole00/niceprog/raw/master/img/niceprog_wiring.jpg" width="70%"/></p>
+  
 
 Uploading sketch via Arduino IDE:
 ---------------------
@@ -48,9 +51,14 @@ Ensure the follwing parameters are set when flashing the Mini S2 or S3 board:
 
 PCB
 ------
-The PCB has a jumper J2 that can select between 3.3V and 5V applied to Pin 1 of the J4 connector.
-When the jumper is removed the pin provides no voltage on that pin (it is left floating).
+The PCB is a convenient way how to connect Wemos S2 mini (or S3 mini) to an FPGA board. It has an optional 
+RGB LED and SPI Flash headers to let you program SPI Flash via programming adaptor you can find cheap on ebay or aliexpress.
+You can also spare some of the sockets and solder Wemos S2 mini directly to the PCB if you do not plan to use 
+the MCU board for other purposes. The PCB has a jumper J2 that selects between 3.3V and 5V applied
+to Pin 1 of the J4 connector. When the jumper is removed the pin provides no voltage on that pin (it is left floating).
 
+ICE40HX8K-EVB mod
+------
 Olimex ICE40HX8K-EVB board can be powered by Niceprog completely by a simple hardware mod
 done on the FPGA board. See the image bellow. 
 
