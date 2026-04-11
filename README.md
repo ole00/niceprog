@@ -54,12 +54,14 @@ Niceprog has 3 parts, all are located in this repo:
   
   Run the PC app without parameters to view options and other usage examples.
 * Arduino app - sources in src directory and niceprog.ino sketch file. Use Arduino IDE 2.3.X and open niceprog.ino file.
-  No other file needs to be opened in the IDE. Ensure the "esp32 by espressif"  board is installed via Board's manager.
+  No other file needs to be opened in the IDE. **Ensure the "esp32 by espressif"  board is installed via Board's manager.**
   I used version 2.0.11, but other (more recent) versions might work as well.  Also ensure to select "ESP32S2 dev module"
-  and enable "USB CDC on boot" option in Tools top menu. See bellow for recommended Arduino IDE parameters.
+  and **enable "USB CDC on boot" option** in Tools top menu. See bellow for recommended Arduino IDE parameters.
 * Optional PCB that breaks out the connection to a programming header. The header works with Olimex ICE40HX8K-EVB.
-  See see design and gerbers folders for more info. You can also connect your FPGA board directly to S2 Mini or S3 Mini
-  by Dupont wires if you prefer to. The S3 mini is connected via the same pins as S2 mini, the correct IO mapping is done in Arduino sketch.
+  See design and gerbers folders for more information.
+
+  You can also connect your FPGA board directly to S2 Mini or S3 Mini by Dupont wires if you prefer to.
+  The S3 mini is connected via the same pins as S2 mini, the correct IO mapping is done in Arduino sketch.
   The direct wiring diagram is as follows:
 <p align="center"><img src="https://github.com/ole00/niceprog/raw/master/img/niceprog_wiring.jpg" width="70%"/></p>
   
@@ -78,6 +80,9 @@ RGB LED and SPI Flash headers to let you program SPI Flash via programming adapt
 You can also spare some of the sockets and solder Wemos S2 mini directly to the PCB if you do not plan to use 
 the MCU board for other purposes. The PCB has a jumper J2 that selects between 3.3V and 5V applied
 to Pin 1 of the J4 connector. When the jumper is removed the pin provides no voltage on that pin (it is left floating).
+
+The PCB can be produced by online fabrication service (jlcpcb, pcbway etc.). Use the zip archive located
+in 'gerbers' directory to have your Niceprog PCB produced.
 
 ICE40HX8K-EVB mod
 ------
