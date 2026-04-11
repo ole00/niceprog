@@ -29,8 +29,30 @@ Performance:
 How it works:
 ---------------------
 Niceprog has 3 parts, all are located in this repo:
-* PC app - sources in src_pc directory. Compile it in Linux by supplied shell scripts. Run the PC app without parameters to view options
-  and basic usage examples. See releases to get a precompiled binary for Mac OS and Windows OS.
+* PC app - sources are in src_pc directory. Compile it in Linux by supplied shell scripts (compile.sh etc.).
+  See github releases to get a precompiled PC App binary for Mac OS and Windows OS.
+  
+  Basic usage:
+  <pre>
+  niceprog.exe -d COM4 i
+  </pre>
+  Runs niceprog PC app (Windows OS version) to identify a flash chip (command 'i') and uses COM4 to communicate
+  with S2 mini connected to PC via USB cable. This is the most basic command that lets you to verify your wiring connection
+  between the MCU and the Flash chip IC (or FPGA board) is functional.
+
+  <pre>
+  ./niceprog -d /dev/ttyACM0 x -f fpga_stream.bin
+  </pre>
+  Runs niceprog PC app (Linux version) to execute an FPGA stream file (command 'x') and uses ttyACM0 device
+  to communicate with S2 mini connected to PC via USB cable.
+
+  <pre>
+  ./niceprog wv -f fpga_stream.bin
+  </pre>
+  Runs niceprog PC app (Linux version) to write and verify an FPGA stream file (command 'w' and command 'v') to the flash chip.
+  This time it auto detects the serial device to communicate with S2 mini connected to PC via USB cable.
+  
+  Run the PC app without parameters to view options and other usage examples.
 * Arduino app - sources in src directory and niceprog.ino sketch file. Use Arduino IDE 2.3.X and open niceprog.ino file.
   No other file needs to be opened in the IDE. Ensure the "esp32 by espressif"  board is installed via Board's manager.
   I used version 2.0.11, but other (more recent) versions might work as well.  Also ensure to select "ESP32S2 dev module"
